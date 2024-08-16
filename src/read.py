@@ -1,7 +1,8 @@
 import pandas as pd
 import pickle as pk
 import multiprocessing as mp
-import os, random, re, warnings
+import os, random, re, warnings, gc
+from database import download
 
 def kmers(seq: str, methyl_seq: list, k=3):
 	converted_seq = list()
@@ -13,28 +14,15 @@ def kmers(seq: str, methyl_seq: list, k=3):
 	methyl_seq = methyl_seq[n_rm_methyl:-n_rm_methyl]
 
 	if len(methyl_seq) != len(converted_seq):
-		ValueError(f"Length of methylation and k-mer DNA seqs are different (%{len(methyl_seq)} vs %{len(converted_seq)})")
+		raise ValueError(f"Length of methylation and k-mer DNA seqs are different (%{len(methyl_seq)} vs %{len(converted_seq)})")
 
 	return " ".join(converted_seq), methyl_seq
 
 def get_processed_sequences(start: int, end: int, methyl_seq: str, dna_seq: str, first_cpg_idx: int, last_cpg_idx: int, k: int, cpg_overlaps):
+	
 	# methylation pattern conversion match in the data 
 	methyl_patterns={"T":"0","C":"1", ".":"2"}
 
-	'''
-	read_methyl = read["methyl"]
-
-	while (first_cpg_idx in cpg_overlaps.index) and (start > cpg_overlaps.loc[first_cpg_idx, "start"]):
-		read_methyl = read_methyl[1:]
-		first_cpg_idx += 1
-		print(first_cpg_idx, cpg_overlaps.loc[first_cpg_idx, "start"], start)
-	while last_cpg_idx < cpg_overlaps.loc[last_cpg_idx, "start"]:
-		read_methyl = read_methyl[:-1]
-		last_cpg_idx -= 1
-
-	# CpG index in the DNA sequence
-	dna_seq = ref_string[start-1:end-1] 
-	'''
 	cpg_idx = [t.start() for t in re.finditer("CG",dna_seq)]
 
 	if len(cpg_idx) != len(methyl_seq):
@@ -122,14 +110,6 @@ def simulate_reads_chr(df_reads: pd.DataFrame,
 				print(read, first_idx, last_idx, methyl_seq)
 				raise ValueError(f"last_idx disappeared: {first_idx}, {last_idx}, {n_count}")
 				return None
-		"""
-		if ( first_idx not in cpg_overlaps.index ):
-			warnings.warn(f"First CpG idx {first_idx} of the read is not in the overlapping CpGs. So the read is not simulated. ")
-			continue
-		if  (last_idx not in cpg_overlaps.index):
-			warnings.warn(f"Last CpG idx {last_idx} of the read is not in in the overlapping CpGs")
-			continue
-		"""
 
 		start,end =  simulate_read_start_end(cpg_overlaps, first_idx, last_idx)
 		original_dna_seq = ref_string[start:end+1]
@@ -263,29 +243,22 @@ def simulate_reads_chr(df_reads: pd.DataFrame,
 	
 
 
-def simulate_reads(df_reads, cpg_overlaps, n_cores: int = 10):
+def simulate_reads(df_reads: pd.DataFrame, 
+				   cpg_overlaps: pd.DataFrame, 
+				   genome: str = "hg19", 
+				   n_cores: int = 10):
 	# Filter reads not fully overlapping with the regions
 	df_reads = df_reads[df_reads["index"].isin(cpg_overlaps.index)]
 	df_reads.loc[:, "nCG"] = df_reads['methyl'].apply(lambda x: len(x))
+	DATA_DIR = os.path.join(os.getcwd(), "data") 
 
 	# Read reference genome saved in a dictionary 
-	if not os.path.exists("/omics/groups/OE0219/internal/Yunhee/WGBS_atlas/data/hg19_dict.pk"):
-		f_ref = "/omics/groups/OE0219/internal/genomes/Hsapiens/hg19/bismark/hg19.fa"
-		 # Reference genome
-		record_iter = SeqIO.parse(f_ref, "fasta")
-
-		# Save the reference genome into a dictionary with chr as a key value
-		dict_ref = dict()
-		for r in record_iter:
-			dict_ref[r.id] = str(r.seq.upper())
-		del record_iter
-
-		# Save ref_genome as a binary file
-		with open("/omics/groups/OE0219/internal/Yunhee/WGBS_atlas/data/hg19_dict.pk", "wb") as fp:
-			pk.dump(dict_ref, fp)
-	else:
-		with open("/omics/groups/OE0219/internal/Yunhee/WGBS_atlas/data/hg19_dict.pk", "rb") as fp:
+	if genome == "hg19":
+		f_genome = download("hg19_genome")
+		with open(f_genome, "rb") as fp:
 			dict_ref = pk.load(fp)
+	else:
+		pass
 
 	# Arguments for multiprocessing - divide reads into each chromosome
 	list_args = list()
@@ -296,7 +269,11 @@ def simulate_reads(df_reads, cpg_overlaps, n_cores: int = 10):
 			print(chr_idx, sub_reads.shape, sub_cpgs.shape)
 			continue
 		else:
-			list_args.append((sub_reads, sub_cpgs, dict_ref["chr%d"%chr_idx], "chr%d"%chr_idx, 3))
+			list_args.append((sub_reads, 
+							  sub_cpgs, 
+							  dict_ref["chr%d"%chr_idx], 
+							  "chr%d"%chr_idx, 
+							  3)) # order according to the "simulate_reads_chr" function
 		del sub_reads, sub_cpgs 	
 
 	# Multiprocessing - simulate reads in each chromosome	
@@ -306,5 +283,8 @@ def simulate_reads(df_reads, cpg_overlaps, n_cores: int = 10):
 	# Merge simulated reads 
 	processed_reads = [p for p in processed_reads if p is not None]
 	del dict_ref
+	gc.collect()
+
 	processed_reads = pd.concat(processed_reads).reset_index(drop=True)
+	
 	return processed_reads

@@ -2,11 +2,9 @@ import argparse, logging, re, os, random, gc, pathlib, glob,json
 import pandas as pd
 import numpy as np
 
-from Bio import SeqIO
-from natsort import natsorted
-
 from read import simulate_reads
 from region import merge_close_regions, find_cpg_overlaps
+from database import download
 
 # Logging 
 logging.basicConfig(format="%(asctime)s %(message)s", level=logging.DEBUG)
@@ -20,6 +18,7 @@ def arg_parser():
 	parser.add_argument("-o", "--output_dir", type=str, default="./", help="Directory to save the results (default: ./)")
 	parser.add_argument("-c", "--cores", type=int, default=1, help="Number of cores for multiprocessing. A larger number increases the computation speed. (default: 1)")
 	parser.add_argument("-r", "--f_region", type=str, default=None, help="Selected regions for training MethylBERT. If not given, it automatically selects regions for the given files.")
+	parser.add_argument("-g", "--genome", type=str, default="hg19", help="Reference genome (either hg19 or hg38). Currently only hg19 is available.")
 	parser.add_argument("-f", "--f_input", required=True, help="Text file containing a list of .pat files OR path to a .pat file")
 
 	return parser.parse_args()
@@ -47,16 +46,14 @@ if __name__=="__main__":
 	args = arg_parser()
 
 	### Set-ups
-	# Find the data dirctory
-	# assume the code is being run at the designated directory
-	DATA_DIR = os.path.join(os.getcwd(), "data") 
-	# output directory
+		# output directory
 	if not os.path.exists(args.output_dir):
 		os.mkdir(args.output_dir)
 
 	# load cell tyep match dictionary 
 	global df_ctype_match
-	with open(os.path.join(DATA_DIR, "cell_type_match.json"), "r") as fp:
+	f_cell_type_match = download("cell_type_match")
+	with open(f_cell_type_match, "r") as fp:
 		df_ctype_match = json.load(fp)
 
 	# input files
@@ -80,8 +77,8 @@ if __name__=="__main__":
 		df_region = pd.read_csv(args.f_region, sep="\t")
 		print(df_region)
 	else:
-		df_region = pd.read_csv(os.path.join(DATA_DIR, "top250_unmethyl_cell_type.csv"),
-								sep="\t")
+		f_region = download("unmethyl_regions")
+		df_region = pd.read_csv(f_region, sep="\t")
 		unique_ctypes = df_files["cell_type"].unique()
 		df_region = df_region.loc[df_region["Type"].apply(lambda x: x in unique_ctypes), :]
 		df_region["dmr_id"] = list(range(df_region.shape[0]))
@@ -91,8 +88,11 @@ if __name__=="__main__":
 		print(f"Regions for {unique_ctypes} are selected")
 
 	# Read cpg file 
-	print("Read hg19 cpg files")
-	f_cpgs = os.path.join(DATA_DIR, "hg19_cpgs.txt")
+	if args.genome == "hg19":
+		print("Read hg19 cpg files")
+		f_cpgs = download("hg19_cpgs")
+	else:
+		pass
 	df_cpg = pd.read_csv(f_cpgs, sep="\t")
 	df_cpg = df_cpg.set_index("index")
 
@@ -130,6 +130,6 @@ if __name__=="__main__":
 		df_reads.columns = ["chr", "index", "methyl", "n_reads"] # for the consistency 
 
 		# Read simulation 
-		res = simulate_reads(df_reads, cpg_overlaps, n_cores=args.cores)
+		res = simulate_reads(df_reads, cpg_overlaps, genome=args.genome, n_cores=args.cores)
 		res["ctype"] = df_files.loc[idx, "cell_type"]
 		res.to_csv(f_out, header= True, sep="\t", index=False)
