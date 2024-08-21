@@ -1,15 +1,10 @@
-import argparse, logging, re, os, random, gc, pathlib, glob,json
+import argparse, re, os, random, gc, pathlib, glob,json
 import pandas as pd
 import numpy as np
 
 from read import simulate_reads
 from region import merge_close_regions, find_cpg_overlaps
 from database import download
-
-# Logging 
-logging.basicConfig(format="%(asctime)s %(message)s", level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 def arg_parser():
 	# Parse input arguments
