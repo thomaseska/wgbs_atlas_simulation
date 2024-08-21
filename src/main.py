@@ -18,7 +18,7 @@ def arg_parser():
 	parser.add_argument("-o", "--output_dir", type=str, default="./", help="Directory to save the results (default: ./)")
 	parser.add_argument("-c", "--cores", type=int, default=1, help="Number of cores for multiprocessing. A larger number increases the computation speed. (default: 1)")
 	parser.add_argument("-r", "--f_region", type=str, default=None, help="Selected regions for training MethylBERT. If not given, it automatically selects regions for the given files.")
-	parser.add_argument("-g", "--genome", type=str, default="hg19", help="Reference genome (either hg19 or hg38). Currently only hg19 is available.")
+	parser.add_argument("-g", "--genome", type=str, default="hg19", help="Reference genome (either hg19 or hg38). Currently only hg19 is available. (default: hg19)")
 	parser.add_argument("-f", "--f_input", required=True, help="Text file containing a list of .pat files OR path to a .pat file")
 
 	return parser.parse_args()
