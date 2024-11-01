@@ -1,4 +1,5 @@
 # Read simulation from the normal cell-type methylation atlas data [Loyfer et al., Nature 2023](https://doi.org/10.1038/s41586-022-05580-6).
+[![DOI](https://zenodo.org/badge/842000340.svg)](https://doi.org/10.5281/zenodo.14025053)
 
 We implemented python codes to simulate sequence reads from the normal cell-type methylation atlas data, primarily for running [**MethylBERT**](https://github.com/CompEpigen/methylbert).
 
