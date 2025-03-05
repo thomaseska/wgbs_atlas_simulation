@@ -14,7 +14,7 @@ def find_cpg_overlaps_chr(df_regions: pd.DataFrame, df_cpgs: pd.DataFrame) -> pd
 														df_cpgs["end"].values,
 														df_cpgs.index.values)
 	if cpg_idx.shape[0] != len(set(list(cpg_idx))):
-		raise ValueError("Some CpGs are located in multiple regions in %s"%(df_regions["chr"][0]))
+		raise ValueError("Some CpGs are located in multiple regions in %s"%(df_regions["chr"].iloc[0]))
 
 	df_cpgs = df_cpgs.loc[list(cpg_idx),:]
 	df_cpgs["dmr_label"] = region_idx 
